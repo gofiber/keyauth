@@ -75,6 +75,10 @@ func New(config ...Config) func(*fiber.Ctx) {
 		cfg.AuthScheme = "Bearer"
 	}
 
+	if cfg.Validator == nil {
+		panic("fiber: key-auth middleware requires a validator function")
+	}
+
 	// Initialize
 	parts := strings.Split(cfg.KeyLookup, ":")
 	extractor := keyFromHeader(parts[1], cfg.AuthScheme)
