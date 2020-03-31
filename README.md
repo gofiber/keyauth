@@ -22,8 +22,8 @@ keyauth.New(config ...keyauth.Config) func(*fiber.Ctx)
 | Property | Type | Description | Default |
 | :--- | :--- | :--- | :--- |
 | Filter | `func(*fiber.Ctx) bool` | Defines a function to skip middleware. | `nil` |
-| SuccessHandler | `func(*fiber.Ctx)` |  SuccessHandler defines a function which is executed for a valid token. | `nil` |
-| ErrorHandler | `func(*fiber.Ctx, error)` | ErrorHandler defines a function which is executed for an invalid token. | `401 Invalid or expired JWT` |
+| SuccessHandler | `func(*fiber.Ctx)` |  SuccessHandler defines a function which is executed for a valid key. | `nil` |
+| ErrorHandler | `func(*fiber.Ctx, error)` | ErrorHandler defines a function which is executed for an invalid key. | `401 Invalid or expired API key` |
 | KeyLookup | `string` | KeyLookup is a string in the form of `<source>:<name>` that is used. | `"header:Authorization"` |
 | AuthScheme | `string` | AuthScheme to be used in the Authorization header. | `"Bearer"` |
 | Validator | `func(string, *fiber.Ctx) (bool, error)` | Validator is a function to validate key. | `nil` |
