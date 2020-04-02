@@ -86,6 +86,7 @@ func apiKeyValidator(key string, c *fiber.Ctx) (bool, error)  {
     
     for _, k := range apiKeys {
         if k.Key == key {
+            c.Locals("client", k)
             return true, nil
         }
     }
