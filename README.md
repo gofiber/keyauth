@@ -1,3 +1,5 @@
+Special thanks to [Jozsefsallai](https://github.com/jozsefsallai)
+
 ### Install
 ```
 go get -u github.com/gofiber/fiber
