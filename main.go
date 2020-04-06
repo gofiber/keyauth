@@ -10,9 +10,7 @@ import (
 	"github.com/gofiber/fiber"
 )
 
-// Config holds the configuration of the middleware. It is completely optional
-// and should only be provided if your application uses token keys that are not
-// RFC6750-compliant.
+// Config ...
 type Config struct {
 	// Filter defines a function to skip middleware.
 	// Optional. Default: nil
@@ -66,16 +64,16 @@ func New(config ...Config) func(*fiber.Ctx) {
 	}
 	// Initialize
 	parts := strings.Split(cfg.TokenLookup, ":")
-	extractor := bearerFromHeader(parts[1], cfg.AuthScheme)
+	extractor := tokenFromHeader(parts[1], cfg.AuthScheme)
 	switch parts[0] {
 	case "query":
-		extractor = bearerFromQuery(parts[1])
+		extractor = tokenFromQuery(parts[1])
 	case "param":
-		extractor = bearerFromParam(parts[1])
+		extractor = tokenFromParam(parts[1])
 	case "form":
-		extractor = bearerFromForm(parts[1])
+		extractor = tokenFromForm(parts[1])
 	case "cookie":
-		extractor = bearerFromCookie(parts[1])
+		extractor = tokenFromCookie(parts[1])
 	}
 
 	return func(c *fiber.Ctx) {
@@ -95,8 +93,8 @@ func New(config ...Config) func(*fiber.Ctx) {
 	}
 }
 
-// bearerFromHeader returns a function that extracts token from the request header.
-func bearerFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string, error) {
+// tokenFromHeader returns a function that extracts token from the request header.
+func tokenFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		auth := c.Get(header)
 		l := len(authScheme)
@@ -107,8 +105,8 @@ func bearerFromHeader(header string, authScheme string) func(c *fiber.Ctx) (stri
 	}
 }
 
-// bearerFromQuery returns a function that extracts token from the query string.
-func bearerFromQuery(param string) func(c *fiber.Ctx) (string, error) {
+// tokenFromQuery returns a function that extracts token from the query string.
+func tokenFromQuery(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		token := c.Query(param)
 		if token == "" {
@@ -118,8 +116,8 @@ func bearerFromQuery(param string) func(c *fiber.Ctx) (string, error) {
 	}
 }
 
-// bearerFromParam returns a function that extracts token from the url param string.
-func bearerFromParam(param string) func(c *fiber.Ctx) (string, error) {
+// tokenFromParam returns a function that extracts token from the url param string.
+func tokenFromParam(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		token := c.Params(param)
 		if token == "" {
@@ -129,8 +127,8 @@ func bearerFromParam(param string) func(c *fiber.Ctx) (string, error) {
 	}
 }
 
-// bearerFromParam returns a function that extracts token from the url param string.
-func bearerFromForm(param string) func(c *fiber.Ctx) (string, error) {
+// tokenFromParam returns a function that extracts token from the url param string.
+func tokenFromForm(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		token := c.FormValue(param)
 		if token == "" {
@@ -140,8 +138,8 @@ func bearerFromForm(param string) func(c *fiber.Ctx) (string, error) {
 	}
 }
 
-// bearerFromCookie returns a function that extracts token from the named cookie.
-func bearerFromCookie(name string) func(c *fiber.Ctx) (string, error) {
+// tokenFromCookie returns a function that extracts token from the named cookie.
+func tokenFromCookie(name string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		token := c.Cookies(name)
 		if token == "" {
