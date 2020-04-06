@@ -1,4 +1,4 @@
-Special thanks to [Jozsefsallai](https://github.com/jozsefsallai)
+Special thanks to [József Sallai](https://github.com/jozsefsallai) & [Ray Mayemir](https://github.com/raymayemir)
 
 ### Install
 ```
