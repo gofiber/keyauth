@@ -27,6 +27,14 @@ type Config struct {
 	// - "cookie:<name>"
 	TokenLookup string
 
+	// Validator defines a function you can pass
+	// to check the token however you want
+	// It will be called with the token
+	// and is expected to return true or false to indicate
+	// that the token is approved or not
+	// Optional. Default: nil
+	Validator func(string) bool
+
 	// Context key to store the bearertoken from the token into context.
 	// Optional. Default: "token".
 	ContextKey string
@@ -34,6 +42,10 @@ type Config struct {
 	// AuthScheme to be used in the Authorization header.
 	// Optional. Default: "Bearer".
 	AuthScheme string
+
+	// SuccessHandler defines a function which is executed for a valid token.
+	// Optional. Default: nil
+	SuccessHandler func(*fiber.Ctx)
 
 	// ErrorHandler defines a function which is executed for an invalid or missing token.
 	// It may be used to define a custom error.
@@ -51,11 +63,21 @@ func New(config ...Config) func(*fiber.Ctx) {
 	if cfg.TokenLookup == "" {
 		cfg.TokenLookup = "header:" + fiber.HeaderAuthorization
 	}
+	if cfg.Validator == nil {
+		cfg.Validator = func(t string) bool {
+			return true
+		}
+	}
 	if cfg.ContextKey == "" {
 		cfg.ContextKey = "token"
 	}
 	if cfg.AuthScheme == "" && strings.ToLower(cfg.TokenLookup) == "header:authorization" {
 		cfg.AuthScheme = "Bearer"
+	}
+	if cfg.SuccessHandler == nil {
+		cfg.SuccessHandler = func(c *fiber.Ctx) {
+			c.Next()
+		}
 	}
 	if cfg.ErrorHandler == nil {
 		cfg.ErrorHandler = func(c *fiber.Ctx, err error) {
@@ -84,12 +106,12 @@ func New(config ...Config) func(*fiber.Ctx) {
 		}
 		// Extract bearer token
 		token, err := extractor(c)
-		if err != nil {
+		if !cfg.Validator(token) {
 			cfg.ErrorHandler(c, err)
 			return
 		}
 		c.Locals(cfg.ContextKey, token)
-		c.Next()
+		cfg.SuccessHandler(c)
 	}
 }
 
