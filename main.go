@@ -44,7 +44,7 @@ type Config struct {
 	AuthScheme string
 
 	// SuccessHandler defines a function which is executed for a valid token.
-	// Optional. Default: nil
+	// Optional. Default: c.Next()
 	SuccessHandler func(*fiber.Ctx)
 
 	// ErrorHandler defines a function which is executed for an invalid or missing token.
