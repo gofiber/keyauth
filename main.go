@@ -1,78 +1,57 @@
 // 🚀 Fiber is an Express inspired web framework written in Go with 💖
 // 📌 API Documentation: https://fiber.wiki
 // 📝 Github Repository: https://github.com/gofiber/fiber
+// Special thanks to Echo: https://github.com/labstack/echo/blob/master/middleware/key_auth.go
 package keyauth
 
 import (
 	"errors"
-	"strings"
-
 	"github.com/gofiber/fiber"
+	"strings"
 )
 
-// Config ...
 type Config struct {
 	// Filter defines a function to skip middleware.
 	// Optional. Default: nil
 	Filter func(*fiber.Ctx) bool
 
-	// TokenLookup is a string in the form of "<source>:<name>" that is used
-	// to extract token from the request.
-	// Optional. Default value "header:authorization".
+	// SuccessHandler defines a function which is executed for a valid key.
+	// Optional. Default: nil
+	SuccessHandler func(*fiber.Ctx)
+
+	// ErrorHandler defines a function which is executed for an invalid key.
+	// It may be used to define a custom error.
+	// Optional. Default: 401 Invalid or expired key
+	ErrorHandler func(*fiber.Ctx, error)
+
+	// KeyLookup is a string in the form of "<source>:<name>" that is used
+	// to extract key from the request.
+	// Optional. Default value "header:Authorization".
 	// Possible values:
 	// - "header:<name>"
 	// - "query:<name>"
-	// - "param:<name>"
 	// - "form:<name>"
+	// - "param:<name>"
 	// - "cookie:<name>"
-	TokenLookup string
-
-	// Validator defines a function you can pass
-	// to check the token however you want
-	// It will be called with the token
-	// and is expected to return true or false to indicate
-	// that the token is approved or not
-	// Optional. Default: nil
-	Validator func(string) bool
-
-	// Context key to store the bearertoken from the token into context.
-	// Optional. Default: "token".
-	ContextKey string
+	KeyLookup string
 
 	// AuthScheme to be used in the Authorization header.
-	// Optional. Default: "Bearer".
+	// Optional. Default value "Bearer".
 	AuthScheme string
 
-	// SuccessHandler defines a function which is executed for a valid token.
-	// Optional. Default: c.Next()
-	SuccessHandler func(*fiber.Ctx)
+	// Validator is a function to validate key.
+	// Required.
+	Validator func(string, *fiber.Ctx) (bool, error)
 
-	// ErrorHandler defines a function which is executed for an invalid or missing token.
-	// It may be used to define a custom error.
-	// Optional. Default: 401 Unauthorized
-	ErrorHandler func(*fiber.Ctx, error)
+	keyExtractor func(*fiber.Ctx) (string, error)
 }
 
-// New creates a middleware for use in Fiber.
+// New ...
 func New(config ...Config) func(*fiber.Ctx) {
 	// Init config
 	var cfg Config
 	if len(config) > 0 {
 		cfg = config[0]
-	}
-	if cfg.TokenLookup == "" {
-		cfg.TokenLookup = "header:" + fiber.HeaderAuthorization
-	}
-	if cfg.Validator == nil {
-		cfg.Validator = func(t string) bool {
-			return true
-		}
-	}
-	if cfg.ContextKey == "" {
-		cfg.ContextKey = "token"
-	}
-	if cfg.AuthScheme == "" && strings.ToLower(cfg.TokenLookup) == "header:authorization" {
-		cfg.AuthScheme = "Bearer"
 	}
 	if cfg.SuccessHandler == nil {
 		cfg.SuccessHandler = func(c *fiber.Ctx) {
@@ -81,92 +60,119 @@ func New(config ...Config) func(*fiber.Ctx) {
 	}
 	if cfg.ErrorHandler == nil {
 		cfg.ErrorHandler = func(c *fiber.Ctx, err error) {
-			c.SendStatus(401)
+			if err.Error() == "Missing or malformed API Key" {
+				c.Status(fiber.StatusBadRequest)
+				c.SendString("Missing or malformed API Key")
+			} else {
+				c.Status(fiber.StatusUnauthorized)
+				c.SendString("Invalid or expired API Key")
+			}
 		}
 	}
-	// Initialize
-	parts := strings.Split(cfg.TokenLookup, ":")
-	extractor := tokenFromHeader(parts[1], cfg.AuthScheme)
-	switch parts[0] {
-	case "query":
-		extractor = tokenFromQuery(parts[1])
-	case "param":
-		extractor = tokenFromParam(parts[1])
-	case "form":
-		extractor = tokenFromForm(parts[1])
-	case "cookie":
-		extractor = tokenFromCookie(parts[1])
+
+	if cfg.KeyLookup == "" {
+		cfg.KeyLookup = "header:" + fiber.HeaderAuthorization
+	}
+	if cfg.AuthScheme == "" {
+		cfg.AuthScheme = "Bearer"
 	}
 
+	if cfg.Validator == nil {
+		panic("fiber: key-auth middleware requires a validator function")
+	}
+
+	// Initialize
+	parts := strings.Split(cfg.KeyLookup, ":")
+	extractor := keyFromHeader(parts[1], cfg.AuthScheme)
+	switch parts[0] {
+	case "query":
+		extractor = keyFromQuery(parts[1])
+	case "form":
+		extractor = keyFromForm(parts[1])
+	case "param":
+		extractor = keyFromParam(parts[1])
+	case "cookie":
+		extractor = keyFromCookie(parts[1])
+	}
+
+	// Return middleware handler
 	return func(c *fiber.Ctx) {
 		// Filter request to skip middleware
 		if cfg.Filter != nil && cfg.Filter(c) {
 			c.Next()
 			return
 		}
-		// Extract token
-		token, err := extractor(c)
-		if !cfg.Validator(token) {
+
+		// Extract and verify key
+		key, err := extractor(c)
+		if err != nil {
 			cfg.ErrorHandler(c, err)
 			return
 		}
-		c.Locals(cfg.ContextKey, token)
-		cfg.SuccessHandler(c)
+
+		valid, err := cfg.Validator(key, c)
+
+		if err == nil && valid {
+			cfg.SuccessHandler(c)
+			return
+		}
+		cfg.ErrorHandler(c, err)
+		return
 	}
 }
 
-// tokenFromHeader returns a function that extracts token from the request header.
-func tokenFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string, error) {
+// keyFromHeader returns a function that extracts api key from the request header.
+func keyFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		auth := c.Get(header)
 		l := len(authScheme)
 		if len(auth) > l+1 && auth[:l] == authScheme {
 			return auth[l+1:], nil
 		}
-		return "", errors.New("Missing or malformed Bearer token")
+		return "", errors.New("Missing or malformed API Key")
 	}
 }
 
-// tokenFromQuery returns a function that extracts token from the query string.
-func tokenFromQuery(param string) func(c *fiber.Ctx) (string, error) {
+// keyFromQuery returns a function that extracts api key from the query string.
+func keyFromQuery(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
-		token := c.Query(param)
-		if token == "" {
-			return "", errors.New("Missing or malformed Bearer token")
+		key := c.Query(param)
+		if key == "" {
+			return "", errors.New("Missing or malformed API Key")
 		}
-		return token, nil
+		return key, nil
 	}
 }
 
-// tokenFromParam returns a function that extracts token from the url param string.
-func tokenFromParam(param string) func(c *fiber.Ctx) (string, error) {
+// keyFromForm returns a `keyExtractor` that extracts api key from the form.
+func keyFromForm(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
-		token := c.Params(param)
-		if token == "" {
-			return "", errors.New("Missing or malformed Bearer token")
+		key := c.FormValue(param)
+		if key == "" {
+			return "", errors.New("Missing or malformed API Key")
 		}
-		return token, nil
+		return key, nil
 	}
 }
 
-// tokenFromParam returns a function that extracts token from the url param string.
-func tokenFromForm(param string) func(c *fiber.Ctx) (string, error) {
+// keyFromParam returns a function that extracts api key from the url param string.
+func keyFromParam(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
-		token := c.FormValue(param)
-		if token == "" {
-			return "", errors.New("Missing or malformed Bearer token")
+		key := c.Params(param)
+		if key == "" {
+			return "", errors.New("Missing or malformed API Key")
 		}
-		return token, nil
+		return key, nil
 	}
 }
 
-// tokenFromCookie returns a function that extracts token from the named cookie.
-func tokenFromCookie(name string) func(c *fiber.Ctx) (string, error) {
+// keyFromCookie returns a function that extracts api key from the named cookie.
+func keyFromCookie(name string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
-		token := c.Cookies(name)
-		if token == "" {
-			return "", errors.New("Missing or malformed Bearer token")
+		key := c.Cookies(name)
+		if key == "" {
+			return "", errors.New("Missing or malformed API Key")
 		}
-		return token, nil
+		return key, nil
 	}
 }
