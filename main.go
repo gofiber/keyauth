@@ -104,7 +104,7 @@ func New(config ...Config) func(*fiber.Ctx) {
 			c.Next()
 			return
 		}
-		// Extract bearer token
+		// Extract token
 		token, err := extractor(c)
 		if !cfg.Validator(token) {
 			cfg.ErrorHandler(c, err)
