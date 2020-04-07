@@ -31,6 +31,8 @@ type Config struct {
 	// - "header:<name>"
 	// - "query:<name>"
 	// - "form:<name>"
+	// - "param:<name>"
+	// - "cookie:<name>"
 	KeyLookup string
 
 	// AuthScheme to be used in the Authorization header.
@@ -87,6 +89,10 @@ func New(config ...Config) func(*fiber.Ctx) {
 		extractor = keyFromQuery(parts[1])
 	case "form":
 		extractor = keyFromForm(parts[1])
+	case "param":
+		extractor = keyFromParam(parts[1])
+	case "cookie":
+		extractor = keyFromCookie(parts[1])
 	}
 
 	// Return middleware handler
@@ -130,11 +136,11 @@ func keyFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string,
 // keyFromQuery returns a function that extracts api key from the query string.
 func keyFromQuery(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
-		token := c.Query(param)
-		if token == "" {
+		key := c.Query(param)
+		if key == "" {
 			return "", errors.New("Missing or malformed API Key")
 		}
-		return token, nil
+		return key, nil
 	}
 }
 
@@ -142,6 +148,28 @@ func keyFromQuery(param string) func(c *fiber.Ctx) (string, error) {
 func keyFromForm(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.FormValue(param)
+		if key == "" {
+			return "", errors.New("Missing or malformed API Key")
+		}
+		return key, nil
+	}
+}
+
+// keyFromParam returns a function that extracts api key from the url param string.
+func keyFromParam(param string) func(c *fiber.Ctx) (string, error) {
+	return func(c *fiber.Ctx) (string, error) {
+		key := c.Params(param)
+		if key == "" {
+			return "", errors.New("Missing or malformed API Key")
+		}
+		return key, nil
+	}
+}
+
+// keyFromCookie returns a function that extracts api key from the named cookie.
+func keyFromCookie(name string) func(c *fiber.Ctx) (string, error) {
+	return func(c *fiber.Ctx) (string, error) {
+		key := c.Cookies(name)
 		if key == "" {
 			return "", errors.New("Missing or malformed API Key")
 		}
