@@ -1,3 +1,9 @@
+# Key Authentication
+
+![Test](https://github.com/gofiber/keyauth/workflows/Test/badge.svg)
+![Security](https://github.com/gofiber/keyauth/workflows/Security/badge.svg)
+![Linter](https://github.com/gofiber/keyauth/workflows/Linter/badge.svg)
+
 Special thanks to [József Sallai](https://github.com/jozsefsallai) & [Ray Mayemir](https://github.com/raymayemir)
 
 ### Install
