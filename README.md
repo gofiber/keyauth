@@ -1,3 +1,11 @@
+# Key Authentication
+
+![Release](https://img.shields.io/github/release/gofiber/keyauth.svg)
+[![Discord](https://img.shields.io/badge/discord-join%20channel-7289DA)](https://gofiber.io/discord)
+![Test](https://github.com/gofiber/keyauth/workflows/Test/badge.svg)
+![Security](https://github.com/gofiber/keyauth/workflows/Security/badge.svg)
+![Linter](https://github.com/gofiber/keyauth/workflows/Linter/badge.svg)
+
 Special thanks to [József Sallai](https://github.com/jozsefsallai) & [Ray Mayemir](https://github.com/raymayemir)
 
 ### Install
