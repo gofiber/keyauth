@@ -58,11 +58,6 @@ func New(config ...Config) func(*fiber.Ctx) {
 	if len(config) > 0 {
 		cfg = config[0]
 	}
-	if cfg.SuccessHandler == nil {
-		cfg.SuccessHandler = func(c *fiber.Ctx) {
-			c.Next()
-		}
-	}
 	if cfg.ErrorHandler == nil {
 		cfg.ErrorHandler = func(c *fiber.Ctx, err error) {
 			if err.Error() == "Missing or malformed API Key" {
