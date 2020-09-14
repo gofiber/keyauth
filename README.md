@@ -10,31 +10,32 @@ Special thanks to [József Sallai](https://github.com/jozsefsallai) & [Ray Mayem
 
 ### Install
 ```
-go get -u github.com/gofiber/fiber
-go get -u github.com/gofiber/keyauth
+go get -u github.com/gofiber/fiber/v2
+go get -u github.com/gofiber/keyauth/v2
 ```
 ### Example
 ```go
 package main
 
 import (
-  "github.com/gofiber/fiber"
-  "github.com/gofiber/keyauth"
+  "github.com/gofiber/fiber/v2"
+  "github.com/gofiber/keyauth/v2"
 )
 
 func main() {
   app := fiber.New()
   
   app.Use(keyauth.New(keyauth.Config{
-    TokenLookup: "cookie:access_token",
+    KeyLookup: "cookie:access_token",
     ContextKey: "my_token"
   }))
   
-  app.Get("/", func(c *fiber.Ctx) {
-    c.Send(c.Locals("my_token"))
+  app.Get("/", func(c *fiber.Ctx) error {
+    token, _ := c.Locals("my_token").(string)
+    return c.SendString(token)
   })
   
-  app.Listen(3000)
+  app.Listen(":3000")
 }
 ```
 ### Test

@@ -8,7 +8,11 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/gofiber/fiber"
+	"github.com/gofiber/fiber/v2"
+)
+
+var (
+	errMissingOrMalformedAPIKey = errors.New("Missing or malformed API Key")
 )
 
 type Config struct {
@@ -18,12 +22,12 @@ type Config struct {
 
 	// SuccessHandler defines a function which is executed for a valid key.
 	// Optional. Default: nil
-	SuccessHandler func(*fiber.Ctx)
+	SuccessHandler fiber.Handler
 
 	// ErrorHandler defines a function which is executed for an invalid key.
 	// It may be used to define a custom error.
 	// Optional. Default: 401 Invalid or expired key
-	ErrorHandler func(*fiber.Ctx, error)
+	ErrorHandler fiber.ErrorHandler
 
 	// KeyLookup is a string in the form of "<source>:<name>" that is used
 	// to extract key from the request.
@@ -52,24 +56,26 @@ type Config struct {
 }
 
 // New ...
-func New(config ...Config) func(*fiber.Ctx) {
+func New(config ...Config) fiber.Handler {
 	// Init config
 	var cfg Config
 	if len(config) > 0 {
 		cfg = config[0]
 	}
-	if cfg.ErrorHandler == nil {
-		cfg.ErrorHandler = func(c *fiber.Ctx, err error) {
-			if err.Error() == "Missing or malformed API Key" {
-				c.Status(fiber.StatusBadRequest)
-				c.SendString("Missing or malformed API Key")
-			} else {
-				c.Status(fiber.StatusUnauthorized)
-				c.SendString("Invalid or expired API Key")
-			}
+
+	if cfg.SuccessHandler == nil {
+		cfg.SuccessHandler = func(c *fiber.Ctx) error {
+			return c.Next()
 		}
 	}
-
+	if cfg.ErrorHandler == nil {
+		cfg.ErrorHandler = func(c *fiber.Ctx, err error) error {
+			if err == errMissingOrMalformedAPIKey {
+				return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+			}
+			return c.Status(fiber.StatusUnauthorized).SendString("Invalid or expired API Key")
+		}
+	}
 	if cfg.KeyLookup == "" {
 		cfg.KeyLookup = "header:" + fiber.HeaderAuthorization
 	}
@@ -100,32 +106,25 @@ func New(config ...Config) func(*fiber.Ctx) {
 	}
 
 	// Return middleware handler
-	return func(c *fiber.Ctx) {
+	return func(c *fiber.Ctx) error {
 		// Filter request to skip middleware
 		if cfg.Filter != nil && cfg.Filter(c) {
-			c.Next()
-			return
+			return c.Next()
 		}
 
 		// Extract and verify key
 		key, err := extractor(c)
 		if err != nil {
-			cfg.ErrorHandler(c, err)
-			return
+			return cfg.ErrorHandler(c, err)
 		}
 
 		valid, err := cfg.Validator(c, key)
 
 		if err == nil && valid {
 			c.Locals(cfg.ContextKey, key)
-			if cfg.SuccessHandler != nil {
-				cfg.SuccessHandler(c)
-			}
-			c.Next()
-			return
+			return cfg.SuccessHandler(c)
 		}
-		cfg.ErrorHandler(c, err)
-		return
+		return cfg.ErrorHandler(c, err)
 	}
 }
 
@@ -137,7 +136,7 @@ func keyFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string,
 		if len(auth) > l+1 && auth[:l] == authScheme {
 			return auth[l+1:], nil
 		}
-		return "", errors.New("Missing or malformed API Key")
+		return "", errMissingOrMalformedAPIKey
 	}
 }
 
@@ -146,7 +145,7 @@ func keyFromQuery(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.Query(param)
 		if key == "" {
-			return "", errors.New("Missing or malformed API Key")
+			return "", errMissingOrMalformedAPIKey
 		}
 		return key, nil
 	}
@@ -157,7 +156,7 @@ func keyFromForm(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.FormValue(param)
 		if key == "" {
-			return "", errors.New("Missing or malformed API Key")
+			return "", errMissingOrMalformedAPIKey
 		}
 		return key, nil
 	}
@@ -168,7 +167,7 @@ func keyFromParam(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.Params(param)
 		if key == "" {
-			return "", errors.New("Missing or malformed API Key")
+			return "", errMissingOrMalformedAPIKey
 		}
 		return key, nil
 	}
@@ -179,7 +178,7 @@ func keyFromCookie(name string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.Cookies(name)
 		if key == "" {
-			return "", errors.New("Missing or malformed API Key")
+			return "", errMissingOrMalformedAPIKey
 		}
 		return key, nil
 	}
