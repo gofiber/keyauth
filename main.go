@@ -132,9 +132,13 @@ func New(config ...Config) fiber.Handler {
 func keyFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		auth := c.Get(header)
-		l := len(authScheme)
-		if len(auth) > l+1 && auth[:l] == authScheme {
-			return auth[l+1:], nil
+		if strings.EqualFold(authScheme, "Other") {
+			return auth, nil
+		} else {
+			l := len(authScheme)
+			if len(auth) > l+1 && auth[:l] == authScheme {
+				return auth[l+1:], nil
+			}
 		}
 		return "", errMissingOrMalformedAPIKey
 	}
