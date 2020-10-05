@@ -78,6 +78,10 @@ func New(config ...Config) fiber.Handler {
 	}
 	if cfg.KeyLookup == "" {
 		cfg.KeyLookup = "header:" + fiber.HeaderAuthorization
+		// set AuthScheme as "Bearer" only if KeyLookup is set to default.
+		if cfg.AuthScheme == "" {
+			cfg.AuthScheme = "Bearer"
+		}
 	}
 	if cfg.Validator == nil {
 		cfg.Validator = func(c *fiber.Ctx, t string) (bool, error) {
@@ -86,9 +90,6 @@ func New(config ...Config) fiber.Handler {
 	}
 	if cfg.ContextKey == "" {
 		cfg.ContextKey = "token"
-	}
-	if cfg.AuthScheme == "" {
-		cfg.AuthScheme = "Bearer"
 	}
 
 	// Initialize
@@ -133,6 +134,9 @@ func keyFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string,
 	return func(c *fiber.Ctx) (string, error) {
 		auth := c.Get(header)
 		l := len(authScheme)
+		if l == 0 {
+			return auth, nil
+		}
 		if len(auth) > l+1 && auth[:l] == authScheme {
 			return auth[l+1:], nil
 		}
