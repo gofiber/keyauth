@@ -27,7 +27,7 @@ func main() {
   
   app.Use(keyauth.New(keyauth.Config{
     KeyLookup: "cookie:access_token",
-    ContextKey: "my_token"
+    ContextKey: "my_token",
   }))
   
   app.Get("/", func(c *fiber.Ctx) error {
