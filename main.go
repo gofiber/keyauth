@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	// When there is no request of the key thrown ErrMissingOrMalformedAPIKey
 	ErrMissingOrMalformedAPIKey = errors.New("missing or malformed API Key")
 )
 
