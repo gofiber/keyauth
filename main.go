@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	errMissingOrMalformedAPIKey = errors.New("Missing or malformed API Key")
+	ErrMissingOrMalformedAPIKey = errors.New("missing or malformed API Key")
 )
 
 type Config struct {
@@ -51,8 +51,6 @@ type Config struct {
 	// Context key to store the bearertoken from the token into context.
 	// Optional. Default: "token".
 	ContextKey string
-
-	keyExtractor func(*fiber.Ctx) (string, error)
 }
 
 // New ...
@@ -70,7 +68,7 @@ func New(config ...Config) fiber.Handler {
 	}
 	if cfg.ErrorHandler == nil {
 		cfg.ErrorHandler = func(c *fiber.Ctx, err error) error {
-			if err == errMissingOrMalformedAPIKey {
+			if err == ErrMissingOrMalformedAPIKey {
 				return c.Status(fiber.StatusBadRequest).SendString(err.Error())
 			}
 			return c.Status(fiber.StatusUnauthorized).SendString("Invalid or expired API Key")
@@ -134,13 +132,13 @@ func keyFromHeader(header string, authScheme string) func(c *fiber.Ctx) (string,
 	return func(c *fiber.Ctx) (string, error) {
 		auth := c.Get(header)
 		l := len(authScheme)
-		if l == 0 {
+		if len(auth) > 0 && l == 0 {
 			return auth, nil
 		}
 		if len(auth) > l+1 && auth[:l] == authScheme {
 			return auth[l+1:], nil
 		}
-		return "", errMissingOrMalformedAPIKey
+		return "", ErrMissingOrMalformedAPIKey
 	}
 }
 
@@ -149,18 +147,18 @@ func keyFromQuery(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.Query(param)
 		if key == "" {
-			return "", errMissingOrMalformedAPIKey
+			return "", ErrMissingOrMalformedAPIKey
 		}
 		return key, nil
 	}
 }
 
-// keyFromForm returns a `keyExtractor` that extracts api key from the form.
+// keyFromForm returns a function that extracts api key from the form.
 func keyFromForm(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.FormValue(param)
 		if key == "" {
-			return "", errMissingOrMalformedAPIKey
+			return "", ErrMissingOrMalformedAPIKey
 		}
 		return key, nil
 	}
@@ -171,7 +169,7 @@ func keyFromParam(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.Params(param)
 		if key == "" {
-			return "", errMissingOrMalformedAPIKey
+			return "", ErrMissingOrMalformedAPIKey
 		}
 		return key, nil
 	}
@@ -182,7 +180,7 @@ func keyFromCookie(name string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
 		key := c.Cookies(name)
 		if key == "" {
-			return "", errMissingOrMalformedAPIKey
+			return "", ErrMissingOrMalformedAPIKey
 		}
 		return key, nil
 	}
