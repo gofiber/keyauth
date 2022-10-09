@@ -5,15 +5,15 @@ updates:
   - package-ecosystem: "gomod"
     directory: "/" # Location of package manifests
     default_labels:
-        - "🤖 Dependencies"
+      - "🤖 Dependencies"
     schedule:
-        interval: "daily"
+      interval: "daily"
     automerged_updates:
-        -   match:
-                dependency_name: "gofiber/fiber/*"
+      -  match:
+            dependency_name: "gofiber/fiber/*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule: 
       interval: daily
     labels: 
-     - "🤖 Dependencies"
+      - "🤖 Dependencies"
