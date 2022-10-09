@@ -1,18 +1,24 @@
 on: [push, pull_request]
 name: Tests
 jobs:
-  Build:
-    strategy:
-      matrix:
-        go-version: [1.14.x]
-        platform: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.platform }}
+    Tests:
+        name: Tests
+        strategy:
+            matrix:
+                go-version:
+                    - 1.15.x
+                    - 1.16.x
+                    - 1.18.x
+                platform:
+                    - ubuntu-latest
+                    - windows-latest
+        runs-on: '${{ matrix.platform }}'
     steps:
     - name: Install Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v3
       with:
         go-version: ${{ matrix.go-version }}
     - name: Fetch Repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Run Test
       run: go test -race
