@@ -19,6 +19,6 @@ jobs:
                 with:
                     go-version: ${{ matrix.go-version }}
             -   name: Fetch Repository
-                uses: actions/checkout@v3
+                uses: actions/checkout@v3.1.0
             -   name: Run Test
                 run: go test -race
