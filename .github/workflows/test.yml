@@ -13,12 +13,12 @@ jobs:
                     - ubuntu-latest
                     - windows-latest
         runs-on: '${{ matrix.platform }}'
-    steps:
-        -   name: Install Go
-            uses: actions/setup-go@v3
-            with:
-                go-version: ${{ matrix.go-version }}
-        -   name: Fetch Repository
-            uses: actions/checkout@v3
-        -   name: Run Test
-            run: go test -race
+        steps:
+            -   name: Install Go
+                uses: actions/setup-go@v3
+                with:
+                    go-version: ${{ matrix.go-version }}
+            -   name: Fetch Repository
+                uses: actions/checkout@v3
+            -   name: Run Test
+                run: go test -race
