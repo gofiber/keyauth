@@ -115,7 +115,7 @@ func main() {
   app := fiber.New()
 
   app.Use(keyauth.New(keyauth.Config{
-	Filter: authFilter,
+    Filter: authFilter,
     KeyLookup: "cookie:access_token",
     Validator: validateApiKey,
   }))
