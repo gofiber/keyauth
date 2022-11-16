@@ -58,7 +58,8 @@ func main() {
 ```
 
 ### Test
-```curl
+
+```bash
 # No api-key specified -> 400 missing 
 curl http://localhost:3000
 #> missing or malformed API Key
