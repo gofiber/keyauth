@@ -22,7 +22,7 @@ import (
   "github.com/gofiber/keyauth/v2"
 )
 
-func validateApiKey(c *fiber.Ctx, key string) (bool, error) {
+func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
 	if key == c.Locals("ContextKey") {
 		return true, nil
 	}
@@ -34,7 +34,7 @@ func main() {
 
   app.Use(keyauth.New(keyauth.Config{
     KeyLookup:  "cookie:access_token",
-    Validator:  validateApiKey,
+    Validator:  validateAPIKey,
     ContextKey: "my-super-secret-key-123"
   }))
 
@@ -75,7 +75,7 @@ import (
   "github.com/gofiber/keyauth/v2"
 )
 
-func validateApiKey(c *fiber.Ctx, key string) (bool, error) {
+func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
 	if key == c.Locals("ContextKey") {
 		return true, nil
 	}
@@ -94,7 +94,7 @@ func main() {
   app.Use(keyauth.New(keyauth.Config{
     Filter: authFilter,
     KeyLookup:  "cookie:access_token",
-    Validator:  validateApiKey,
+    Validator:  validateAPIKey,
     ContextKey: "my-super-secret-key-123"
   }))
 
