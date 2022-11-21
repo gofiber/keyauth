@@ -46,11 +46,9 @@ type Config struct {
 	AuthScheme string
 
 	// Validator is a function to validate key.
-	// Optional. Default: nil
 	Validator func(*fiber.Ctx, string) (bool, error)
 
 	// Context key to store the bearertoken from the token into context.
-	// Optional. Default: "token".
 	ContextKey string
 }
 
@@ -70,7 +68,7 @@ func New(config ...Config) fiber.Handler {
 	if cfg.ErrorHandler == nil {
 		cfg.ErrorHandler = func(c *fiber.Ctx, err error) error {
 			if err == ErrMissingOrMalformedAPIKey {
-				return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+				return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
 			}
 			return c.Status(fiber.StatusUnauthorized).SendString("Invalid or expired API Key")
 		}
@@ -83,12 +81,10 @@ func New(config ...Config) fiber.Handler {
 		}
 	}
 	if cfg.Validator == nil {
-		cfg.Validator = func(c *fiber.Ctx, t string) (bool, error) {
-			return true, nil
-		}
+		panic("fiber: keyauth middleware requires a validator function")
 	}
 	if cfg.ContextKey == "" {
-		cfg.ContextKey = "token"
+		panic("fiber: keyauth middleware requires a ContextKey")
 	}
 
 	// Initialize
@@ -118,10 +114,11 @@ func New(config ...Config) fiber.Handler {
 			return cfg.ErrorHandler(c, err)
 		}
 
+		// first set the ContextKey as Locals so the Validator can be checked correctly
+		c.Locals("ContextKey", cfg.ContextKey)
 		valid, err := cfg.Validator(c, key)
 
 		if err == nil && valid {
-			c.Locals(cfg.ContextKey, key)
 			return cfg.SuccessHandler(c)
 		}
 		return cfg.ErrorHandler(c, err)
