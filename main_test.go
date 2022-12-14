@@ -29,7 +29,7 @@ func TestKeyAuth(t *testing.T) {
 			return false, ErrMissingOrMalformedAPIKey
 		},
 		ContextKey: "token",
-		ApiKey:     "MySecretPassword",
+		APIKey:     "MySecretPassword",
 	}))
 
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -39,25 +39,25 @@ func TestKeyAuth(t *testing.T) {
 	// define test cases
 	tests := []struct {
 		description  string
-		apiKey       string
+		APIKey       string
 		expectedCode int
 		expectedBody string
 	}{
 		{
 			description:  "Normal Authentication Case",
-			apiKey:       "MySecretPassword",
+			APIKey:       "MySecretPassword",
 			expectedCode: 200,
 			expectedBody: "Successfully authenticated!",
 		},
 		{
 			description:  "Wrong API Key",
-			apiKey:       "WRONG KEY",
+			APIKey:       "WRONG KEY",
 			expectedCode: 401,
 			expectedBody: "missing or malformed API Key",
 		},
 		{
 			description:  "Wrong API Key",
-			apiKey:       "", // NO KEY
+			APIKey:       "", // NO KEY
 			expectedCode: 401,
 			expectedBody: "missing or malformed API Key",
 		},
@@ -67,8 +67,8 @@ func TestKeyAuth(t *testing.T) {
 	for _, test := range tests {
 		var req *http.Request
 		req, _ = http.NewRequest("GET", "/", nil)
-		if test.apiKey != "" {
-			req.Header.Set("key", test.apiKey)
+		if test.APIKey != "" {
+			req.Header.Set("key", test.APIKey)
 		}
 
 		res, err := app.Test(req, -1)
@@ -104,7 +104,7 @@ func TestMultipleKeyAuth(t *testing.T) {
 			return false, ErrMissingOrMalformedAPIKey
 		},
 		ContextKey: "token_auth1",
-		ApiKey: "password1",
+		APIKey: "password1",
 	}))
 
 	// setup keyauth for /auth2
@@ -120,7 +120,7 @@ func TestMultipleKeyAuth(t *testing.T) {
 			return false, ErrMissingOrMalformedAPIKey
 		},
 		ContextKey: "token_auth2",
-		ApiKey: "password2",
+		APIKey: "password2",
 	}))
 
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -139,7 +139,7 @@ func TestMultipleKeyAuth(t *testing.T) {
 	tests := []struct {
 		route 		 string
 		description  string
-		apiKey       string
+		APIKey       string
 		expectedCode int
 		expectedBody string
 	}{
@@ -147,7 +147,7 @@ func TestMultipleKeyAuth(t *testing.T) {
 		{
 			route:        "/",
 			description:  "No password needed",
-			apiKey:       "",
+			APIKey:       "",
 			expectedCode: 200,
 			expectedBody: "No auth needed!",
 		},
@@ -156,21 +156,21 @@ func TestMultipleKeyAuth(t *testing.T) {
 		{
 			route:        "/auth1",
 			description:  "Normal Authentication Case",
-			apiKey:       "password1",
+			APIKey:       "password1",
 			expectedCode: 200,
 			expectedBody: "Successfully authenticated for auth1!",
 		},
 		{
 			route:        "/auth1",
 			description:  "Wrong API Key",
-			apiKey:       "WRONG KEY",
+			APIKey:       "WRONG KEY",
 			expectedCode: 401,
 			expectedBody: "missing or malformed API Key",
 		},
 		{
 			route:        "/auth1",
 			description:  "Wrong API Key",
-			apiKey:       "", // NO KEY
+			APIKey:       "", // NO KEY
 			expectedCode: 401,
 			expectedBody: "missing or malformed API Key",
 		},
@@ -179,21 +179,21 @@ func TestMultipleKeyAuth(t *testing.T) {
 		{
 			route:        "/auth2",
 			description:  "Normal Authentication Case for auth2",
-			apiKey:       "password2",
+			APIKey:       "password2",
 			expectedCode: 200,
 			expectedBody: "Successfully authenticated for auth2!",
 		},
 		{
 			route:        "/auth2",
 			description:  "Wrong API Key",
-			apiKey:       "WRONG KEY",
+			APIKey:       "WRONG KEY",
 			expectedCode: 401,
 			expectedBody: "missing or malformed API Key",
 		},
 		{
 			route:        "/auth2",
 			description:  "Wrong API Key",
-			apiKey:       "", // NO KEY
+			APIKey:       "", // NO KEY
 			expectedCode: 401,
 			expectedBody: "missing or malformed API Key",
 		},
@@ -204,8 +204,8 @@ func TestMultipleKeyAuth(t *testing.T) {
 	for _, test := range tests {
 		var req *http.Request
 		req, _ = http.NewRequest("GET", test.route, nil)
-		if test.apiKey != "" {
-			req.Header.Set("key", test.apiKey)
+		if test.APIKey != "" {
+			req.Header.Set("key", test.APIKey)
 		}
 
 		res, err := app.Test(req, -1)
