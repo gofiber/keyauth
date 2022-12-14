@@ -13,12 +13,6 @@ import (
 	"github.com/gofiber/fiber/v2/utils"
 )
 
-func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
-	if key == c.Locals("ContextKey") {
-		return true, nil
-	}
-	return false, ErrMissingOrMalformedAPIKey
-}
 
 func TestKeyAuth(t *testing.T) {
 
@@ -28,8 +22,14 @@ func TestKeyAuth(t *testing.T) {
 	// use keyauth.New and keyauth.Config outside of testing
 	app.Use(New(Config{
 		KeyLookup:  "header:key",
-		Validator:  validateAPIKey,
-		ContextKey: "MySecretPassword",
+		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
+			if key == c.Locals("token") {
+				return true, nil
+			}
+			return false, ErrMissingOrMalformedAPIKey
+		},
+		ContextKey: "token",
+		ApiKey:     "MySecretPassword",
 	}))
 
 	app.Get("/", func(c *fiber.Ctx) error {

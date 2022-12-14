@@ -49,7 +49,11 @@ type Config struct {
 	Validator func(*fiber.Ctx, string) (bool, error)
 
 	// Context key to store the bearertoken from the token into context.
+	// Optional. Default: "token".
 	ContextKey string
+
+	// API Key which is used by the Validator function for authentication
+	ApiKey string
 }
 
 // New ...
@@ -84,7 +88,10 @@ func New(config ...Config) fiber.Handler {
 		panic("fiber: keyauth middleware requires a validator function")
 	}
 	if cfg.ContextKey == "" {
-		panic("fiber: keyauth middleware requires a ContextKey")
+		cfg.ContextKey = "token"
+	}
+	if cfg.ApiKey == "" {
+		panic("fiber: keyauth middleware requires an ApiKey")
 	}
 
 	// Initialize
@@ -115,7 +122,7 @@ func New(config ...Config) fiber.Handler {
 		}
 
 		// first set the ContextKey as Locals so the Validator can be checked correctly
-		c.Locals("ContextKey", cfg.ContextKey)
+		c.Locals(cfg.ContextKey, cfg.ApiKey)
 		valid, err := cfg.Validator(c, key)
 
 		if err == nil && valid {
