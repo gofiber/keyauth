@@ -6,6 +6,7 @@ package keyauth
 
 import (
 	"errors"
+	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -165,8 +166,14 @@ func keyFromForm(param string) func(c *fiber.Ctx) (string, error) {
 // keyFromParam returns a function that extracts api key from the url param string.
 func keyFromParam(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
-		key := c.Params(param)
-		if key == "" {
+		// somehow two path unescapes are needed to get the original key again
+		// see also tests for param in main_test.go
+		key, err := url.PathUnescape(c.Params(param))
+		if err != nil {
+			return "", ErrMissingOrMalformedAPIKey
+		}
+		key, err = url.PathUnescape(key)
+		if key == "" || err != nil {
 			return "", ErrMissingOrMalformedAPIKey
 		}
 		return key, nil
