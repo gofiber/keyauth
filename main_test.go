@@ -7,6 +7,7 @@ package keyauth
 import (
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,17 +20,14 @@ func TestKeyAuth(t *testing.T) {
 	// setup the fiber endpoint
 	app := fiber.New()
 
-	// use keyauth.New and keyauth.Config outside of testing
 	app.Use(New(Config{
 		KeyLookup:  "header:key",
 		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
-			if key == c.Locals("token") {
+			if key == "MySecretPassword" {
 				return true, nil
 			}
 			return false, ErrMissingOrMalformedAPIKey
 		},
-		ContextKey: "token",
-		APIKey:     "MySecretPassword",
 	}))
 
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -85,6 +83,186 @@ func TestKeyAuth(t *testing.T) {
 	}
 }
 
+func TestAuthSources(t *testing.T) {
+
+	var CorrectKey = "correct horse battery staple"
+	// define test cases
+	tests := []struct {
+		route 		  string
+		authSource    string
+		authTokenName string
+		description   string
+		APIKey        string
+		expectedCode  int
+		expectedBody  string
+	}{
+		// header:access_token auth
+		{
+			route:         "/",
+			authSource:    "header",
+			authTokenName: "access_token",
+			description:   "Testing Header:access_token",
+			APIKey:        CorrectKey,
+			expectedCode:  200,
+			expectedBody:  "Success!",
+		},
+		{
+			route:         "/",
+			authSource:    "header",
+			authTokenName: "access_token",
+			description:   "Testing Header:access_token with a wrong key",
+			APIKey:        "WRONGKEY",
+			expectedCode:  401,
+			expectedBody:  "missing or malformed API Key",
+		},
+
+		// cookie:access_token auth
+		{
+			route:         "/",
+			authSource:    "cookie",
+			authTokenName: "access_token",
+			description:   "Testing cookie:access_token",
+			APIKey:        CorrectKey,
+			expectedCode:  200,
+			expectedBody:  "Success!",
+		},
+		{
+			route:         "/",
+			authSource:    "cookie",
+			authTokenName: "access_token",
+			description:   "Testing cookie:access_token with a wrong key",
+			APIKey:        "WRONGKEY",
+			expectedCode:  401,
+			expectedBody:  "missing or malformed API Key",
+		},
+		
+		// query:access_token auth
+		{
+			route:         "/",
+			authSource:    "query",
+			authTokenName: "access_token",
+			description:   "Testing query:access_token",
+			APIKey:        CorrectKey,
+			expectedCode:  200,
+			expectedBody:  "Success!",
+		},
+		{
+			route:         "/",
+			authSource:    "query",
+			authTokenName: "access_token",
+			description:   "Testing query:access_token with a wrong key",
+			APIKey:        "WRONGKEY",
+			expectedCode:  401,
+			expectedBody:  "missing or malformed API Key",
+		},
+
+		// param:access_token auth
+		// TOOD: somehow the params are not handed-off to c.Params() when keyauth is used 
+		/*{
+			route:         "/key/",
+			authSource:    "param",
+			authTokenName: "access_token",
+			description:   "Testing param:access_token",
+			APIKey:        CorrectKey,
+			expectedCode:  200,
+			expectedBody:  "Success!",
+		},
+		{
+			route:         "/key/",
+			authSource:    "param",
+			authTokenName: "access_token",
+			description:   "Testing param:access_token with a wrong key",
+			APIKey:        "WRONGKEY",
+			expectedCode:  401,
+			expectedBody:  "missing or malformed API Key",
+		},*/
+		
+		// form:access_token auth
+		{
+			route:         "/",
+			authSource:    "form",
+			authTokenName: "access_token",
+			description:   "Testing form:access_token",
+			APIKey:        CorrectKey,
+			expectedCode:  200,
+			expectedBody:  "Success!",
+		},
+		{
+			route:         "/",
+			authSource:    "form",
+			authTokenName: "access_token",
+			description:   "Testing form:access_token with a wrong key",
+			APIKey:        "WRONGKEY",
+			expectedCode:  401,
+			expectedBody:  "missing or malformed API Key",
+		},
+	}
+
+
+	for _, test := range tests {
+		// setup the fiber endpoint
+		app := fiber.New()
+		
+		app.Use(New(Config{
+			KeyLookup:  test.authSource + ":" + test.authTokenName,
+			Validator:  func(c *fiber.Ctx, key string) (bool, error) {
+				if key == CorrectKey {
+					return true, nil
+				}
+				return false, ErrMissingOrMalformedAPIKey
+			},
+		}))
+
+
+		app.Get("/", func(c *fiber.Ctx) error {
+			return c.SendString("Success!")
+		})
+		app.Get("/key/:" + test.authTokenName, func(c *fiber.Ctx) error {
+			return c.SendString("Success!")
+		})
+
+		
+		// construct the test HTTP request
+		var req *http.Request
+		req, _ = http.NewRequest("GET", test.route, nil)
+		
+		// setup the apikey for the different auth schemes
+		if test.authSource == "header" {
+
+			req.Header.Set(test.authTokenName, test.APIKey)
+
+		} else if test.authSource == "cookie" {
+			
+			req.Header.Set("Cookie", test.authTokenName + "=" + test.APIKey)
+
+		} else if test.authSource == "query" || test.authSource == "form" {
+			
+			q := req.URL.Query()
+			q.Add(test.authTokenName, test.APIKey)
+			req.URL.RawQuery = q.Encode()
+
+		} else if test.authSource == "param" {
+			
+			r := req.URL.Path
+			r = r + url.QueryEscape(test.APIKey)
+			req.URL.Path = r
+
+		}
+
+		res, err := app.Test(req, -1)
+
+		utils.AssertEqual(t, nil, err, test.description)
+
+		// test the body of the request
+		body, err := ioutil.ReadAll(res.Body)
+		utils.AssertEqual(t, test.expectedCode, res.StatusCode, test.description)
+
+		// body
+		utils.AssertEqual(t, nil, err, test.description)
+		utils.AssertEqual(t, test.expectedBody, string(body), test.description)
+	}
+}
+
 
 func TestMultipleKeyAuth(t *testing.T) {
 
@@ -98,13 +276,11 @@ func TestMultipleKeyAuth(t *testing.T) {
 		},
 		KeyLookup: "header:key",
 		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
-			if key == c.Locals("token_auth1") {
+			if key == "password1" {
 				return true, nil
 			}
 			return false, ErrMissingOrMalformedAPIKey
 		},
-		ContextKey: "token_auth1",
-		APIKey: "password1",
 	}))
 
 	// setup keyauth for /auth2
@@ -114,13 +290,11 @@ func TestMultipleKeyAuth(t *testing.T) {
 		},
 		KeyLookup: "header:key",
 		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
-			if key == c.Locals("token_auth2") {
+			if key == "password2" {
 				return true, nil
 			}
 			return false, ErrMissingOrMalformedAPIKey
 		},
-		ContextKey: "token_auth2",
-		APIKey: "password2",
 	}))
 
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -197,7 +371,6 @@ func TestMultipleKeyAuth(t *testing.T) {
 			expectedCode: 401,
 			expectedBody: "missing or malformed API Key",
 		},
-
 	}
 
 	// run the tests
