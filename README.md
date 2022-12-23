@@ -22,8 +22,12 @@ import (
   "github.com/gofiber/keyauth/v2"
 )
 
+var (
+  APIKey = "correct horse battery staple"
+)
+
 func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
-	if key == c.Locals("ContextKey") {
+	if key == APIKey {
 		return true, nil
 	}
 	return false, keyauth.ErrMissingOrMalformedAPIKey
@@ -31,11 +35,11 @@ func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
 
 func main() {
   app := fiber.New()
-
+  
+  // note that the keyauth middleware needs to be defined before the routes are defined!
   app.Use(keyauth.New(keyauth.Config{
     KeyLookup:  "cookie:access_token",
     Validator:  validateAPIKey,
-    ContextKey: "my-super-secret-key-123"
   }))
 
   app.Get("/", func(c *fiber.Ctx) error {
@@ -53,7 +57,7 @@ func main() {
 curl http://localhost:3000
 #> missing or malformed API Key
 
-curl --cookie "access_token=my-super-secret-key-123" http://localhost:3000
+curl --cookie "access_token=correct horse battery staple" http://localhost:3000
 #> Successfully authenticated!
 
 curl --cookie "access_token=Clearly A Wrong Key" http://localhost:3000
@@ -74,9 +78,12 @@ import (
   "github.com/gofiber/fiber/v2"
   "github.com/gofiber/keyauth/v2"
 )
+var (
+  APIKey = "correct horse battery staple"
+)
 
 func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
-	if key == c.Locals("ContextKey") {
+	if key == APIKey {
 		return true, nil
 	}
 	return false, keyauth.ErrMissingOrMalformedAPIKey
@@ -95,7 +102,6 @@ func main() {
     Filter: authFilter,
     KeyLookup:  "cookie:access_token",
     Validator:  validateAPIKey,
-    ContextKey: "my-super-secret-key-123"
   }))
 
   app.Get("/", func(c *fiber.Ctx) error {
@@ -120,10 +126,10 @@ curl http://localhost:3000
 #> Welcome
 
 # /authenticated needs to be authenticated
-curl --cookie "access_token=my-super-secret-key-123" http://localhost:3000/authenticated
+curl --cookie "access_token=correct horse battery staple" http://localhost:3000/authenticated
 #> Successfully authenticated!
 
 # /auth2 needs to be authenticated too
-curl --cookie "access_token=my-super-secret-key-123" http://localhost:3000/auth2
+curl --cookie "access_token=correct horse battery staple" http://localhost:3000/auth2
 #> Successfully authenticated 2!
 ```
