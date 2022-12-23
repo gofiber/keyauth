@@ -85,7 +85,7 @@ func TestKeyAuth(t *testing.T) {
 
 func TestAuthSources(t *testing.T) {
 
-	var CorrectKey = "correct horse battery staple"
+	var CorrectKey = "specials: !$%,.#\"!?~`<>@$^*(){}[]|/\\123"
 	// define test cases
 	tests := []struct {
 		route 		  string
@@ -157,9 +157,8 @@ func TestAuthSources(t *testing.T) {
 		},
 
 		// param:access_token auth
-		// TOOD: somehow the params are not handed-off to c.Params() when keyauth is used 
-		/*{
-			route:         "/key/",
+		{
+			route:         "/key/", // will end as '/key/:access_token'
 			authSource:    "param",
 			authTokenName: "access_token",
 			description:   "Testing param:access_token",
@@ -175,7 +174,7 @@ func TestAuthSources(t *testing.T) {
 			APIKey:        "WRONGKEY",
 			expectedCode:  401,
 			expectedBody:  "missing or malformed API Key",
-		},*/
+		},
 		
 		// form:access_token auth
 		{
@@ -203,7 +202,7 @@ func TestAuthSources(t *testing.T) {
 		// setup the fiber endpoint
 		app := fiber.New()
 		
-		app.Use(New(Config{
+		authMiddleware := New(Config{
 			KeyLookup:  test.authSource + ":" + test.authTokenName,
 			Validator:  func(c *fiber.Ctx, key string) (bool, error) {
 				if key == CorrectKey {
@@ -211,13 +210,18 @@ func TestAuthSources(t *testing.T) {
 				}
 				return false, ErrMissingOrMalformedAPIKey
 			},
-		}))
-
-
-		app.Get("/", func(c *fiber.Ctx) error {
-			return c.SendString("Success!")
 		})
-		app.Get("/key/:" + test.authTokenName, func(c *fiber.Ctx) error {
+
+		var route string
+		if test.authSource == "param" {
+			route = test.route + ":" + test.authTokenName
+			app.Use(route, authMiddleware)
+		} else {
+			route = test.route
+			app.Use(authMiddleware)
+		}
+
+		app.Get(route, func(c *fiber.Ctx) error {
 			return c.SendString("Success!")
 		})
 
@@ -244,7 +248,7 @@ func TestAuthSources(t *testing.T) {
 		} else if test.authSource == "param" {
 			
 			r := req.URL.Path
-			r = r + url.QueryEscape(test.APIKey)
+			r = r + url.PathEscape(test.APIKey)
 			req.URL.Path = r
 
 		}
