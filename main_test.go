@@ -200,8 +200,9 @@ func TestAuthSources(t *testing.T) {
 
 	for _, test := range tests {
 		// setup the fiber endpoint
-		app := fiber.New()
-		
+		// note that if UnescapePath: false (the default)
+		// escaped characters (such as `\"`) will not be handled correctly in the tests
+		app := fiber.New(fiber.Config{UnescapePath: true})
 		authMiddleware := New(Config{
 			KeyLookup:  test.authSource + ":" + test.authTokenName,
 			Validator:  func(c *fiber.Ctx, key string) (bool, error) {
