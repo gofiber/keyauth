@@ -14,7 +14,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func validateApiKey(ctx *fiber.Ctx, s string) (bool, error) {
+func validateAPIKey(ctx *fiber.Ctx, s string) (bool, error) {
 	if s == "" {
 	  return false, &fiber.Error{Code: 403, Message: "Missing API key"}
 	}
@@ -299,7 +299,7 @@ func TestCustomValidatorFunc(t *testing.T) {
 
 	// Use the KeyAuth middleware with a custom Validator function
 	app.Use(New(Config{
-		Validator: validateApiKey,
+		Validator: validateAPIKey,
 	}))
 
 	// Define a test handler
