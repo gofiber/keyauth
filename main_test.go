@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/utils"
+	"github.com/gofiber/fiber/v2/utils"
 )
 
 func validateAPIKey(ctx *fiber.Ctx, s string) (bool, error) {
