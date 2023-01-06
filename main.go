@@ -6,6 +6,7 @@ package keyauth
 
 import (
 	"errors"
+	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -46,7 +47,6 @@ type Config struct {
 	AuthScheme string
 
 	// Validator is a function to validate key.
-	// Optional. Default: nil
 	Validator func(*fiber.Ctx, string) (bool, error)
 
 	// Context key to store the bearertoken from the token into context.
@@ -70,7 +70,7 @@ func New(config ...Config) fiber.Handler {
 	if cfg.ErrorHandler == nil {
 		cfg.ErrorHandler = func(c *fiber.Ctx, err error) error {
 			if err == ErrMissingOrMalformedAPIKey {
-				return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+				return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
 			}
 			return c.Status(fiber.StatusUnauthorized).SendString("Invalid or expired API Key")
 		}
@@ -83,9 +83,7 @@ func New(config ...Config) fiber.Handler {
 		}
 	}
 	if cfg.Validator == nil {
-		cfg.Validator = func(c *fiber.Ctx, t string) (bool, error) {
-			return true, nil
-		}
+		panic("fiber: keyauth middleware requires a validator function")
 	}
 	if cfg.ContextKey == "" {
 		cfg.ContextKey = "token"
@@ -168,8 +166,8 @@ func keyFromForm(param string) func(c *fiber.Ctx) (string, error) {
 // keyFromParam returns a function that extracts api key from the url param string.
 func keyFromParam(param string) func(c *fiber.Ctx) (string, error) {
 	return func(c *fiber.Ctx) (string, error) {
-		key := c.Params(param)
-		if key == "" {
+		key, err := url.PathUnescape(c.Params(param))
+		if err != nil {
 			return "", ErrMissingOrMalformedAPIKey
 		}
 		return key, nil

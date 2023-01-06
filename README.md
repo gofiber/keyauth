@@ -22,31 +22,24 @@ import (
   "github.com/gofiber/keyauth/v2"
 )
 
-const (
-  apiKey = "my-super-secret-key"
-)
-
 var (
-  errMissing = &fiber.Error{Code: 403, Message: "Missing API key"}
-  errInvalid  = &fiber.Error{Code: 403, Message: "Invalid API key"}
+  APIKey = "correct horse battery staple"
 )
 
-func validateApiKey(ctx *fiber.Ctx, s string) (bool, error) {
-  if s == "" {
-    return false, errMissing
-  }
-  if s == apiKey {
-    return true, nil
-  }
-  return false, errInvalid
+func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
+	if key == APIKey {
+		return true, nil
+	}
+	return false, keyauth.ErrMissingOrMalformedAPIKey
 }
 
 func main() {
   app := fiber.New()
-
+  
+  // note that the keyauth middleware needs to be defined before the routes are defined!
   app.Use(keyauth.New(keyauth.Config{
-    KeyLookup: "cookie:access_token",
-    Validator: validateApiKey,
+    KeyLookup:  "cookie:access_token",
+    Validator:  validateAPIKey,
   }))
 
   app.Get("/", func(c *fiber.Ctx) error {
@@ -64,11 +57,11 @@ func main() {
 curl http://localhost:3000
 #> missing or malformed API Key
 
-curl --cookie "access_token=my-super-secret-key" http://localhost:3000
+curl --cookie "access_token=correct horse battery staple" http://localhost:3000
 #> Successfully authenticated!
 
 curl --cookie "access_token=Clearly A Wrong Key" http://localhost:3000
-#> Invalid or expired API Key
+#>  missing or malformed API Key
 ```
 
 For a more detailed example, see also the [`github.com/gofiber/recipes`](https://github.com/gofiber/recipes) repository and specifically the `fiber-envoy-extauthz` repository and the [`keyauth example`](https://github.com/gofiber/recipes/blob/master/fiber-envoy-extauthz/authz/main.go) code.
@@ -85,24 +78,15 @@ import (
   "github.com/gofiber/fiber/v2"
   "github.com/gofiber/keyauth/v2"
 )
-
-const (
-  apiKey = "my-super-secret-key"
-)
-
 var (
-  errMissing = &fiber.Error{Code: 403, Message: "Missing API key"}
-  errInvalid  = &fiber.Error{Code: 403, Message: "Invalid API key"}
+  APIKey = "correct horse battery staple"
 )
 
-func validateApiKey(ctx *fiber.Ctx, s string) (bool, error) {
-  if s == "" {
-    return false, errMissing
-  }
-  if s == apiKey {
-    return true, nil
-  }
-  return false, errInvalid
+func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
+	if key == APIKey {
+		return true, nil
+	}
+	return false, keyauth.ErrMissingOrMalformedAPIKey
 }
 
 func authFilter(c *fiber.Ctx) bool {
@@ -116,8 +100,8 @@ func main() {
 
   app.Use(keyauth.New(keyauth.Config{
     Filter: authFilter,
-    KeyLookup: "cookie:access_token",
-    Validator: validateApiKey,
+    KeyLookup:  "cookie:access_token",
+    Validator:  validateAPIKey,
   }))
 
   app.Get("/", func(c *fiber.Ctx) error {
@@ -142,10 +126,10 @@ curl http://localhost:3000
 #> Welcome
 
 # /authenticated needs to be authenticated
-curl --cookie "access_token=my-super-secret-key" http://localhost:3000/authenticated
+curl --cookie "access_token=correct horse battery staple" http://localhost:3000/authenticated
 #> Successfully authenticated!
 
 # /auth2 needs to be authenticated too
-curl --cookie "access_token=my-super-secret-key" http://localhost:3000/auth2
+curl --cookie "access_token=correct horse battery staple" http://localhost:3000/auth2
 #> Successfully authenticated 2!
 ```
