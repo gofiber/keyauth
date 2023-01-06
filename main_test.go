@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/utils"
 )
 
 func validateAPIKey(ctx *fiber.Ctx, s string) (bool, error) {
@@ -47,12 +48,8 @@ func TestKeyLookupHeader(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, res.StatusCode)
-	}
-	if string(body) != ErrMissingOrMalformedAPIKey.Error() {
-		t.Errorf("Expected response body '%s', got '%s'", ErrMissingOrMalformedAPIKey.Error(), string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 
 	// Create a request with a valid API key in the Authorization header
 	req := httptest.NewRequest("GET", "/", nil)
@@ -68,12 +65,55 @@ func TestKeyLookupHeader(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid" {
-		t.Errorf("Expected response body 'API key is valid', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid")
+}
+
+func TestKeyLookupParam(t *testing.T) {
+    // Initialize a Fiber app with the KeyAuth middleware
+    app := fiber.New()
+
+	// define middleware
+	authMiddleware := New(Config{
+		KeyLookup:  "param:api_key",
+		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
+		    if key == "valid-key" {
+		        return true, nil
+		    }
+		    return false, ErrMissingOrMalformedAPIKey
+		},
+	})
+
+    // Define a test handler
+    app.Get("/:api_key", authMiddleware, func(c *fiber.Ctx) error {
+        return c.SendString("API key is valid")
+    })
+
+    // Create a request without an API key and  Send the request to the app
+    res, err := app.Test(httptest.NewRequest("GET", "/wrong-key", nil))
+    if err != nil {
+        t.Error(err)
+    }
+
+    // Read the response body into a string
+    body, _ := ioutil.ReadAll(res.Body)
+
+    // Check that the response has the expected status code and body
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
+
+    // Create a request with a valid API key in the "api_key" URL parameter
+    res, err = app.Test(httptest.NewRequest("GET", "/valid-key", nil))
+    if err != nil {
+        t.Error(err)
+    }
+
+    // Read the response body into a string
+    body, _ = ioutil.ReadAll(res.Body)
+
+    // Check that the response has the expected status code and body
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid")
 }
 
 func TestKeyLookupQuery(t *testing.T) {
@@ -100,12 +140,8 @@ func TestKeyLookupQuery(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, res.StatusCode)
-	}
-	if string(body) != ErrMissingOrMalformedAPIKey.Error() {
-		t.Errorf("Expected response body '%s', got '%s'", ErrMissingOrMalformedAPIKey.Error(), string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 
 	// Create a request with a valid API key in the "api_key" query parameter
 	req := httptest.NewRequest("GET", "/?api_key=valid-key", nil)
@@ -120,12 +156,8 @@ func TestKeyLookupQuery(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid" {
-		t.Errorf("Expected response body 'API key is valid', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid")
 }
 
 func TestKeyLookupForm(t *testing.T) {
@@ -151,12 +183,8 @@ func TestKeyLookupForm(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, res.StatusCode)
-	}
-	if string(body) != ErrMissingOrMalformedAPIKey.Error() {
-		t.Errorf("Expected response body '%s', got '%s'", ErrMissingOrMalformedAPIKey.Error(), string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 
 	// Create a request with a valid API key in the "api_key" form parameter
 	req := httptest.NewRequest("GET", "/", strings.NewReader("api_key=valid-key"))
@@ -172,12 +200,8 @@ func TestKeyLookupForm(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid" {
-		t.Errorf("Expected response body 'API key is valid', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid")
 }
 
 func TestKeyLookupCookie(t *testing.T) {
@@ -203,12 +227,8 @@ func TestKeyLookupCookie(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, res.StatusCode)
-	}
-	if string(body) != ErrMissingOrMalformedAPIKey.Error() {
-		t.Errorf("Expected response body '%s', got '%s'", ErrMissingOrMalformedAPIKey.Error(), string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 
 	// Create a request with a valid API key in the "api_key" cookie
 	req := httptest.NewRequest("GET", "/", nil)
@@ -227,12 +247,8 @@ func TestKeyLookupCookie(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid" {
-		t.Errorf("Expected response body 'API key is valid', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid")
 }
 
 func TestCustomSuccessAndFailureHandlers(t *testing.T) {
@@ -264,12 +280,8 @@ func TestCustomSuccessAndFailureHandlers(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, res.StatusCode)
-	}
-	if string(body) != "API key is invalid and request was handled by custom error handler" {
-		t.Errorf("Expected response body 'API key is invalid and request was handled by custom error handler', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), "API key is invalid and request was handled by custom error handler")
 
 	// Create a request with a valid API key in the Authorization header
 	req := httptest.NewRequest("GET", "/", nil)
@@ -285,12 +297,8 @@ func TestCustomSuccessAndFailureHandlers(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid and request was handled by custom success handler" {
-		t.Errorf("Expected response body 'API key is valid and request was handled by custom success handler', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid and request was handled by custom success handler")
 }
 
 func TestCustomValidatorFunc(t *testing.T) {
@@ -317,12 +325,8 @@ func TestCustomValidatorFunc(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, res.StatusCode)
-	}
-	if string(body) != "missing or malformed API Key" {
-		t.Errorf("Expected response body 'missing or malformed API Key', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 
 	// Create a request with a valid API key and send it to the app
 	req := httptest.NewRequest("GET", "/", nil)
@@ -336,12 +340,8 @@ func TestCustomValidatorFunc(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid" {
-		t.Errorf("Expected response body 'API key is valid', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid")
 }
 
 func TestCustomFilterFunc(t *testing.T) {
@@ -371,12 +371,8 @@ func TestCustomFilterFunc(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid and request was allowed by custom filter" {
-		t.Errorf("Expected response body 'API key is valid and request was allowed by custom filter', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid and request was allowed by custom filter")
 
 	// Create a request with a different path and send it to the app
 	req = httptest.NewRequest("GET", "/not-allowed", nil)
@@ -389,12 +385,8 @@ func TestCustomFilterFunc(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, res.StatusCode)
-	}
-	if string(body) != "missing or malformed API Key" {
-		t.Errorf("Expected response body '%s', got '%s'", "missing or malformed API Key", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 }
 
 func TestAuthSchemeToken(t *testing.T) {
@@ -424,12 +416,8 @@ func TestAuthSchemeToken(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid" {
-		t.Errorf("Expected response body 'API key is valid', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid")
 }
 
 func TestAuthSchemeBasic(t *testing.T) {
@@ -456,12 +444,8 @@ func TestAuthSchemeBasic(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, res.StatusCode)
-	}
-	if string(body) != "missing or malformed API Key" {
-		t.Errorf("Expected response body 'missing or malformed API Key', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 
 	// Create a request with a valid API key in the "Authorization" header using the "Basic" scheme
 	req := httptest.NewRequest("GET", "/", nil)
@@ -477,10 +461,6 @@ func TestAuthSchemeBasic(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, res.StatusCode)
-	}
-	if string(body) != "API key is valid" {
-		t.Errorf("Expected response body 'API key is valid', got '%s'", string(body))
-	}
+	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
+    utils.AssertEqual(t, string(body), "API key is valid")
 }
