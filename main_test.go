@@ -5,6 +5,7 @@
 package keyauth
 
 import (
+    "fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -15,20 +16,9 @@ import (
 	"github.com/gofiber/fiber/v2/utils"
 )
 
-
-func validateAPIKey(ctx *fiber.Ctx, s string) (bool, error) {
-	if s == "" {
-	  return false, &fiber.Error{Code: 403, Message: "Missing API key"}
-	}
-	if s == "valid-key" {
-	  return true, nil
-	}
-	return false, &fiber.Error{Code: 403, Message: "Invalid API key"}
-}
+const CorrectKey = "specials: !$%,.#\"!?~`<>@$^*(){}[]|/\\123"
 
 func TestAuthSources(t *testing.T) {
-
-	var CorrectKey = "specials: !$%,.#\"!?~`<>@$^*(){}[]|/\\123"
 	// define test cases
 	testSources := []string {"header", "cookie", "query", "param", "form"}
 
@@ -150,7 +140,6 @@ func TestAuthSources(t *testing.T) {
 
 
 func TestMultipleKeyAuth(t *testing.T) {
-
 	// setup the fiber endpoint
 	app := fiber.New()
 
@@ -281,9 +270,8 @@ func TestMultipleKeyAuth(t *testing.T) {
 }
 
 func TestCustomSuccessAndFailureHandlers(t *testing.T) {
-	// Initialize a Fiber app with the KeyAuth middleware
-	// Use the KeyAuth middleware with the default configuration and custom SuccessHandler and ErrorHandler functions
 	app := fiber.New()
+
 	app.Use(New(Config{
 		SuccessHandler: func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusOK).SendString("API key is valid and request was handled by custom success handler")
@@ -291,7 +279,12 @@ func TestCustomSuccessAndFailureHandlers(t *testing.T) {
 		ErrorHandler:func(c *fiber.Ctx, err error) error {
 			return c.Status(fiber.StatusUnauthorized).SendString("API key is invalid and request was handled by custom error handler")
 		},
-		Validator: validateAPIKey,
+		Validator: func(c *fiber.Ctx, key string) (bool, error) {
+		    if key == CorrectKey {
+				return true, nil
+			}
+			return false, ErrMissingOrMalformedAPIKey
+		},
 	}))
 
 	// Define a test handler that should not be called
@@ -315,7 +308,7 @@ func TestCustomSuccessAndFailureHandlers(t *testing.T) {
 
 	// Create a request with a valid API key in the Authorization header
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Add("Authorization", "Bearer valid-key")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", CorrectKey))
 
 	// Send the request to the app
 	res, err = app.Test(req)
@@ -331,59 +324,19 @@ func TestCustomSuccessAndFailureHandlers(t *testing.T) {
     utils.AssertEqual(t, string(body), "API key is valid and request was handled by custom success handler")
 }
 
-func TestCustomValidatorFunc(t *testing.T) {
-	// Initialize a Fiber app with the KeyAuth middleware
-	app := fiber.New()
-
-	// Use the KeyAuth middleware with a custom Validator function
-	app.Use(New(Config{
-		Validator: validateAPIKey,
-	}))
-
-	// Define a test handler
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("API key is valid")
-	})
-
-	// Create a request with an invalid API key and send it to the app
-	res, err := app.Test(httptest.NewRequest("GET", "/", nil))
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ := ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusUnauthorized)
-    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
-
-	// Create a request with a valid API key and send it to the app
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Add("Authorization", "Bearer valid-key")
-	res, err = app.Test(req)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ = ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
-    utils.AssertEqual(t, string(body), "API key is valid")
-}
-
 func TestCustomFilterFunc(t *testing.T) {
-	// Initialize a Fiber app with the KeyAuth middleware
-	// Use the KeyAuth middleware with a custom Filter function that only allows requests with the "/allowed" path
 	app := fiber.New()
 
 	app.Use(New(Config{
 		Filter: func(c *fiber.Ctx) bool {
 			return c.Path() == "/allowed"
 		},
-		Validator: validateAPIKey,
+		Validator: func(c *fiber.Ctx, key string) (bool, error) {
+		    if key == CorrectKey {
+				return true, nil
+			}
+			return false, ErrMissingOrMalformedAPIKey
+		},
 	}))
 
 	// Define a test handler
@@ -405,8 +358,24 @@ func TestCustomFilterFunc(t *testing.T) {
 	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
     utils.AssertEqual(t, string(body), "API key is valid and request was allowed by custom filter")
 
-	// Create a request with a different path and send it to the app
+	// Create a request with a different path and send it to the app without correct key
 	req = httptest.NewRequest("GET", "/not-allowed", nil)
+	res, err = app.Test(req)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Read the response body into a string
+	body, _ = ioutil.ReadAll(res.Body)
+
+	// Check that the response has the expected status code and body
+	utils.AssertEqual(t, res.StatusCode, http.StatusUnauthorized)
+    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
+
+	// Create a request with a different path and send it to the app with correct key
+	req = httptest.NewRequest("GET", "/not-allowed", nil)
+	req.Header.Add("Authorization", fmt.Sprintf("Basic %s", CorrectKey))
+
 	res, err = app.Test(req)
 	if err != nil {
 		t.Error(err)
@@ -421,12 +390,16 @@ func TestCustomFilterFunc(t *testing.T) {
 }
 
 func TestAuthSchemeToken(t *testing.T) {
-	// Initialize a Fiber app with the KeyAuth middleware
-	// Use the KeyAuth middleware with the "AuthScheme: Token" configuration
 	app := fiber.New()
+
 	app.Use(New(Config{
 		AuthScheme: "Token",
-		Validator: validateAPIKey,
+		Validator: func(c *fiber.Ctx, key string) (bool, error) {
+		    if key == CorrectKey {
+				return true, nil
+			}
+			return false, ErrMissingOrMalformedAPIKey
+		},
 	}))
 
 	// Define a test handler
@@ -436,7 +409,7 @@ func TestAuthSchemeToken(t *testing.T) {
 
 	// Create a request with a valid API key in the "Token" Authorization header
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Add("Authorization", "Token valid-key")
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", CorrectKey))
 
 	// Send the request to the app
 	res, err := app.Test(req)
@@ -453,13 +426,17 @@ func TestAuthSchemeToken(t *testing.T) {
 }
 
 func TestAuthSchemeBasic(t *testing.T) {
-	// Initialize a Fiber app with the KeyAuth middleware
-	// Use the KeyAuth middleware with the "header:Authorization" and "Basic" configuration
 	app := fiber.New()
+
 	app.Use(New(Config{
 		KeyLookup: "header:Authorization",
 		AuthScheme: "Basic",
-		Validator: validateAPIKey,
+		Validator: func(c *fiber.Ctx, key string) (bool, error) {
+		    if key == CorrectKey {
+				return true, nil
+			}
+			return false, ErrMissingOrMalformedAPIKey
+		},
 	}))
 
 	// Define a test handler
@@ -482,7 +459,7 @@ func TestAuthSchemeBasic(t *testing.T) {
 
 	// Create a request with a valid API key in the "Authorization" header using the "Basic" scheme
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Add("Authorization", "Basic valid-key")
+	req.Header.Add("Authorization", fmt.Sprintf("Basic %s", CorrectKey))
 
 	// Send the request to the app
 	res, err = app.Test(req)
