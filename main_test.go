@@ -5,15 +5,16 @@
 package keyauth
 
 import (
-	"strings"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/utils"
 )
+
 
 func validateAPIKey(ctx *fiber.Ctx, s string) (bool, error) {
 	if s == "" {
@@ -25,230 +26,258 @@ func validateAPIKey(ctx *fiber.Ctx, s string) (bool, error) {
 	return false, &fiber.Error{Code: 403, Message: "Invalid API key"}
 }
 
-func TestKeyLookupHeader(t *testing.T) {
-	// Initialize a Fiber app
-	app := fiber.New()
+func TestAuthSources(t *testing.T) {
 
-	// Use the KeyAuth middleware with the default configuration
-	app.Use(New())
+	var CorrectKey = "specials: !$%,.#\"!?~`<>@$^*(){}[]|/\\123"
+	// define test cases
+	testSources := []string {"header", "cookie", "query", "param", "form"}
 
-	// Define a test handler
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("API key is valid")
-	})
-
-	// Test the default KeyLookup value "header:Authorization"
-	// Create a request without an API key and  Send the request to the app
-	res, err := app.Test(httptest.NewRequest("GET", "/", nil))
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ := ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
-    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
-
-	// Create a request with a valid API key in the Authorization header
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Add("Authorization", "Bearer valid-key")
-
-	// Send the request to the app
-	res, err = app.Test(req)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ = ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
-    utils.AssertEqual(t, string(body), "API key is valid")
-}
-
-func TestKeyLookupParam(t *testing.T) {
-    // Initialize a Fiber app with the KeyAuth middleware
-    app := fiber.New()
-
-	// define middleware
-	authMiddleware := New(Config{
-		KeyLookup:  "param:api_key",
-		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
-		    if key == "valid-key" {
-		        return true, nil
-		    }
-		    return false, ErrMissingOrMalformedAPIKey
+	tests := []struct {
+		route         string
+		authTokenName string
+		description   string
+		APIKey        string
+		expectedCode  int
+		expectedBody  string
+	}{
+		{
+			route:         "/",
+			authTokenName: "access_token",
+			description:   "auth with correct key",
+			APIKey:        CorrectKey,
+			expectedCode:  200,
+			expectedBody:  "Success!",
 		},
-	})
+		{
+			route:         "/",
+			authTokenName: "access_token",
+			description:   "auth with no key",
+			APIKey:        "",
+			expectedCode:  401, // 404 in case of param authentication
+			expectedBody:  "missing or malformed API Key",
+		},
+		{
+			route:         "/",
+			authTokenName: "access_token",
+			description:   "auth with wrong key",
+			APIKey:        "WRONGKEY",
+			expectedCode:  401,
+			expectedBody:  "missing or malformed API Key",
+		},
+	}
 
-    // Define a test handler
-    app.Get("/:api_key", authMiddleware, func(c *fiber.Ctx) error {
-        return c.SendString("API key is valid")
-    })
 
-    // Create a request without an API key and  Send the request to the app
-    res, err := app.Test(httptest.NewRequest("GET", "/wrong-key", nil))
-    if err != nil {
-        t.Error(err)
-    }
+	for _, authSource := range testSources {
+		t.Run(authSource, func(t *testing.T) {
+			for _, test := range tests {
+				// setup the fiber endpoint
+				// note that if UnescapePath: false (the default)
+				// escaped characters (such as `\"`) will not be handled correctly in the tests
+				app := fiber.New(fiber.Config{UnescapePath: true})
 
-    // Read the response body into a string
-    body, _ := ioutil.ReadAll(res.Body)
+				authMiddleware := New(Config{
+					KeyLookup:  authSource + ":" + test.authTokenName,
+					Validator:  func(c *fiber.Ctx, key string) (bool, error) {
+						if key == CorrectKey {
+							return true, nil
+						}
+						return false, ErrMissingOrMalformedAPIKey
+					},
+				})
 
-    // Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
-    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
+				var route string
+				if authSource == "param" {
+					route = test.route + ":" + test.authTokenName
+					app.Use(route, authMiddleware)
+				} else {
+					route = test.route
+					app.Use(authMiddleware)
+				}
 
-    // Create a request with a valid API key in the "api_key" URL parameter
-    res, err = app.Test(httptest.NewRequest("GET", "/valid-key", nil))
-    if err != nil {
-        t.Error(err)
-    }
+				app.Get(route, func(c *fiber.Ctx) error {
+					return c.SendString("Success!")
+				})
 
-    // Read the response body into a string
-    body, _ = ioutil.ReadAll(res.Body)
+				// construct the test HTTP request
+				var req *http.Request
+				req, _ = http.NewRequest("GET", test.route, nil)
+				
+				// setup the apikey for the different auth schemes
+				if authSource == "header" {
 
-    // Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
-    utils.AssertEqual(t, string(body), "API key is valid")
+					req.Header.Set(test.authTokenName, test.APIKey)
+
+				} else if authSource == "cookie" {
+
+					req.Header.Set("Cookie", test.authTokenName + "=" + test.APIKey)
+
+				} else if authSource == "query" || authSource == "form" {
+
+					q := req.URL.Query()
+					q.Add(test.authTokenName, test.APIKey)
+					req.URL.RawQuery = q.Encode()
+
+				} else if authSource == "param" {
+
+					r := req.URL.Path
+					r = r + url.PathEscape(test.APIKey)
+					req.URL.Path = r
+
+				}
+
+				res, err := app.Test(req, -1)
+
+				utils.AssertEqual(t, nil, err, test.description)
+
+				// test the body of the request
+				body, err := ioutil.ReadAll(res.Body)
+				// for param authentication, the route would be /:access_token 
+				// when the access_token is empty, it leads to a 404 (not found)
+				// not a 401 (auth error)
+				if authSource == "param" && test.APIKey == "" {
+					test.expectedCode = 404
+					test.expectedBody = "Cannot GET /"
+				}
+				utils.AssertEqual(t, test.expectedCode, res.StatusCode, test.description)
+
+				// body
+				utils.AssertEqual(t, nil, err, test.description)
+				utils.AssertEqual(t, test.expectedBody, string(body), test.description)
+			}
+		})
+	}
 }
 
-func TestKeyLookupQuery(t *testing.T) {
-	// Initialize a Fiber app
+
+func TestMultipleKeyAuth(t *testing.T) {
+
+	// setup the fiber endpoint
 	app := fiber.New()
 
-	// Use the KeyAuth middleware with the "query:api_key" configuration
+	// setup keyauth for /auth1
 	app.Use(New(Config{
-		KeyLookup: "query:api_key",
+		Filter: func(c *fiber.Ctx) bool {
+			return c.OriginalURL() != "/auth1"
+		},
+		KeyLookup: "header:key",
+		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
+			if key == "password1" {
+				return true, nil
+			}
+			return false, ErrMissingOrMalformedAPIKey
+		},
 	}))
 
-	// Define a test handler
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("API key is valid")
-	})
-
-	// Create a request without an API key and  Send the request to the app
-	res, err := app.Test(httptest.NewRequest("GET", "/", nil))
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ := ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
-    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
-
-	// Create a request with a valid API key in the "api_key" query parameter
-	req := httptest.NewRequest("GET", "/?api_key=valid-key", nil)
-
-	// Send the request to the app
-	res, err = app.Test(req)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ = ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
-    utils.AssertEqual(t, string(body), "API key is valid")
-}
-
-func TestKeyLookupForm(t *testing.T) {
-	// Initialize a Fiber app with the KeyAuth middleware
-	// Use the KeyAuth middleware with the "form:api_key" configuration
-	app := fiber.New()
+	// setup keyauth for /auth2
 	app.Use(New(Config{
-		KeyLookup: "form:api_key",
+		Filter: func(c *fiber.Ctx) bool {
+			return c.OriginalURL() != "/auth2"
+		},
+		KeyLookup: "header:key",
+		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
+			if key == "password2" {
+				return true, nil
+			}
+			return false, ErrMissingOrMalformedAPIKey
+		},
 	}))
 
-	// Define a test handler
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("API key is valid")
+		return c.SendString("No auth needed!")
 	})
 
-	// Create a request without an API key and  Send the request to the app
-	res, err := app.Test(httptest.NewRequest("GET", "/", nil))
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ := ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
-    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
-
-	// Create a request with a valid API key in the "api_key" form parameter
-	req := httptest.NewRequest("GET", "/", strings.NewReader("api_key=valid-key"))
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	// Send the request to the app
-	res, err = app.Test(req)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ = ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
-    utils.AssertEqual(t, string(body), "API key is valid")
-}
-
-func TestKeyLookupCookie(t *testing.T) {
-	// Initialize a Fiber app with the KeyAuth middleware
-	// Use the KeyAuth middleware with the "cookie:api_key" configuration
-	app := fiber.New()
-	app.Use(New(Config{
-		KeyLookup: "cookie:api_key",
-	}))
-
-	// Define a test handler
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("API key is valid")
+	app.Get("/auth1", func(c *fiber.Ctx) error {
+		return c.SendString("Successfully authenticated for auth1!")
 	})
 
-	// Create a request without an API key and  Send the request to the app
-	res, err := app.Test(httptest.NewRequest("GET", "/", nil))
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Read the response body into a string
-	body, _ := ioutil.ReadAll(res.Body)
-
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
-    utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
-
-	// Create a request with a valid API key in the "api_key" cookie
-	req := httptest.NewRequest("GET", "/", nil)
-	req.AddCookie(&http.Cookie{
-		Name:  "api_key",
-		Value: "valid-key",
+	app.Get("/auth2", func(c *fiber.Ctx) error {
+		return c.SendString("Successfully authenticated for auth2!")
 	})
 
-	// Send the request to the app
-	res, err = app.Test(req)
-	if err != nil {
-		t.Error(err)
+	// define test cases
+	tests := []struct {
+		route 		 string
+		description  string
+		APIKey       string
+		expectedCode int
+		expectedBody string
+	}{
+		// No auth needed for /
+		{
+			route:        "/",
+			description:  "No password needed",
+			APIKey:       "",
+			expectedCode: 200,
+			expectedBody: "No auth needed!",
+		},
+		
+		// auth needed for auth1
+		{
+			route:        "/auth1",
+			description:  "Normal Authentication Case",
+			APIKey:       "password1",
+			expectedCode: 200,
+			expectedBody: "Successfully authenticated for auth1!",
+		},
+		{
+			route:        "/auth1",
+			description:  "Wrong API Key",
+			APIKey:       "WRONG KEY",
+			expectedCode: 401,
+			expectedBody: "missing or malformed API Key",
+		},
+		{
+			route:        "/auth1",
+			description:  "Wrong API Key",
+			APIKey:       "", // NO KEY
+			expectedCode: 401,
+			expectedBody: "missing or malformed API Key",
+		},
+
+		// Auth 2 has a different password
+		{
+			route:        "/auth2",
+			description:  "Normal Authentication Case for auth2",
+			APIKey:       "password2",
+			expectedCode: 200,
+			expectedBody: "Successfully authenticated for auth2!",
+		},
+		{
+			route:        "/auth2",
+			description:  "Wrong API Key",
+			APIKey:       "WRONG KEY",
+			expectedCode: 401,
+			expectedBody: "missing or malformed API Key",
+		},
+		{
+			route:        "/auth2",
+			description:  "Wrong API Key",
+			APIKey:       "", // NO KEY
+			expectedCode: 401,
+			expectedBody: "missing or malformed API Key",
+		},
 	}
 
-	// Read the response body into a string
-	body, _ = ioutil.ReadAll(res.Body)
+	// run the tests
+	for _, test := range tests {
+		var req *http.Request
+		req, _ = http.NewRequest("GET", test.route, nil)
+		if test.APIKey != "" {
+			req.Header.Set("key", test.APIKey)
+		}
 
-	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
-    utils.AssertEqual(t, string(body), "API key is valid")
+		res, err := app.Test(req, -1)
+
+		utils.AssertEqual(t, nil, err, test.description)
+
+		// test the body of the request
+		body, err := ioutil.ReadAll(res.Body)
+		utils.AssertEqual(t, test.expectedCode, res.StatusCode, test.description)
+
+		// body
+		utils.AssertEqual(t, nil, err, test.description)
+		utils.AssertEqual(t, test.expectedBody, string(body), test.description)
+	}
 }
 
 func TestCustomSuccessAndFailureHandlers(t *testing.T) {
@@ -260,8 +289,9 @@ func TestCustomSuccessAndFailureHandlers(t *testing.T) {
 			return c.Status(fiber.StatusOK).SendString("API key is valid and request was handled by custom success handler")
 		},
 		ErrorHandler:func(c *fiber.Ctx, err error) error {
-			return c.Status(fiber.StatusBadRequest).SendString("API key is invalid and request was handled by custom error handler")
+			return c.Status(fiber.StatusUnauthorized).SendString("API key is invalid and request was handled by custom error handler")
 		},
+		Validator: validateAPIKey,
 	}))
 
 	// Define a test handler that should not be called
@@ -280,7 +310,7 @@ func TestCustomSuccessAndFailureHandlers(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+	utils.AssertEqual(t, res.StatusCode, http.StatusUnauthorized)
     utils.AssertEqual(t, string(body), "API key is invalid and request was handled by custom error handler")
 
 	// Create a request with a valid API key in the Authorization header
@@ -325,7 +355,7 @@ func TestCustomValidatorFunc(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+	utils.AssertEqual(t, res.StatusCode, http.StatusUnauthorized)
     utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 
 	// Create a request with a valid API key and send it to the app
@@ -353,6 +383,7 @@ func TestCustomFilterFunc(t *testing.T) {
 		Filter: func(c *fiber.Ctx) bool {
 			return c.Path() == "/allowed"
 		},
+		Validator: validateAPIKey,
 	}))
 
 	// Define a test handler
@@ -385,7 +416,7 @@ func TestCustomFilterFunc(t *testing.T) {
 	body, _ = ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+	utils.AssertEqual(t, res.StatusCode, http.StatusUnauthorized)
     utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 }
 
@@ -395,6 +426,7 @@ func TestAuthSchemeToken(t *testing.T) {
 	app := fiber.New()
 	app.Use(New(Config{
 		AuthScheme: "Token",
+		Validator: validateAPIKey,
 	}))
 
 	// Define a test handler
@@ -427,6 +459,7 @@ func TestAuthSchemeBasic(t *testing.T) {
 	app.Use(New(Config{
 		KeyLookup: "header:Authorization",
 		AuthScheme: "Basic",
+		Validator: validateAPIKey,
 	}))
 
 	// Define a test handler
@@ -444,12 +477,12 @@ func TestAuthSchemeBasic(t *testing.T) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	// Check that the response has the expected status code and body
-	utils.AssertEqual(t, res.StatusCode, http.StatusBadRequest)
+	utils.AssertEqual(t, res.StatusCode, http.StatusUnauthorized)
     utils.AssertEqual(t, string(body), ErrMissingOrMalformedAPIKey.Error())
 
 	// Create a request with a valid API key in the "Authorization" header using the "Basic" scheme
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Add("Authorization", "Basic dmFsaWQta2V5")
+	req.Header.Add("Authorization", "Basic valid-key")
 
 	// Send the request to the app
 	res, err = app.Test(req)
@@ -464,3 +497,4 @@ func TestAuthSchemeBasic(t *testing.T) {
 	utils.AssertEqual(t, res.StatusCode, http.StatusOK)
     utils.AssertEqual(t, string(body), "API key is valid")
 }
+
