@@ -133,3 +133,38 @@ curl --cookie "access_token=correct horse battery staple" http://localhost:3000/
 curl --cookie "access_token=correct horse battery staple" http://localhost:3000/auth2
 #> Successfully authenticated 2!
 ```
+
+### Specifying middleware in the handler
+
+```go
+package main
+
+import (
+  "github.com/gofiber/fiber/v2"
+  "github.com/gofiber/keyauth/v2"
+)
+
+const (
+  apiKey = "my-super-secret-key"
+)
+
+func main() {
+  app := fiber.New()
+
+  authMiddleware := keyauth.New(keyauth.Config{
+    KeyLookup:  "param:access_token",
+    Validator:  func(c *fiber.Ctx, key string) (bool, error) {
+        if key == apiKey {
+            return true, nil
+        }
+        return false, ErrMissingOrMalformedAPIKey
+    },
+  })
+
+  app.Get("/:access_token",  authMiddleware, func(c *fiber.Ctx) error {
+    return c.SendString("Successfully authenticated!")
+  })
+
+  app.Listen(":3000")
+}
+```
