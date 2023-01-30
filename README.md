@@ -18,35 +18,40 @@ go get -u github.com/gofiber/keyauth/v2
 package main
 
 import (
-  "github.com/gofiber/fiber/v2"
-  "github.com/gofiber/keyauth/v2"
+	"crypto/sha256"
+	"crypto/subtle"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/keyauth/v2"
 )
 
 var (
-  APIKey = "correct horse battery staple"
+	apiKey = "correct horse battery staple"
 )
 
 func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
-	if key == APIKey {
+	hashedAPIKey := sha256.Sum256([]byte(apiKey))
+	hashedKey := sha256.Sum256([]byte(key))
+
+	if subtle.ConstantTimeCompare(hashedAPIKey[:], hashedKey[:]) == 1 {
 		return true, nil
 	}
 	return false, keyauth.ErrMissingOrMalformedAPIKey
 }
 
 func main() {
-  app := fiber.New()
-  
-  // note that the keyauth middleware needs to be defined before the routes are defined!
-  app.Use(keyauth.New(keyauth.Config{
-    KeyLookup:  "cookie:access_token",
-    Validator:  validateAPIKey,
-  }))
+	app := fiber.New()
 
-  app.Get("/", func(c *fiber.Ctx) error {
-    return c.SendString("Successfully authenticated!")
-  })
+	// note that the keyauth middleware needs to be defined before the routes are defined!
+	app.Use(keyauth.New(keyauth.Config{
+		KeyLookup:  "cookie:access_token",
+		Validator:  validateAPIKey,
+	}))
 
-  app.Listen(":3000")
+		app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Successfully authenticated!")
+	})
+
+	app.Listen(":3000")
 }
 ```
 
@@ -75,46 +80,63 @@ If you want to authenticate only certain endpoints, you can use the `Config` of 
 package main
 
 import (
-  "github.com/gofiber/fiber/v2"
-  "github.com/gofiber/keyauth/v2"
+	"crypto/sha256"
+	"crypto/subtle"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/keyauth/v2"
+	"regexp"
+	"strings"
 )
+
 var (
-  APIKey = "correct horse battery staple"
+	apiKey        = "correct horse battery staple"
+	protectedURLs = []*regexp.Regexp{
+		regexp.MustCompile("^/authenticated$"),
+		regexp.MustCompile("^/auth2$"),
+	}
 )
 
 func validateAPIKey(c *fiber.Ctx, key string) (bool, error) {
-	if key == APIKey {
+	hashedAPIKey := sha256.Sum256([]byte(apiKey))
+	hashedKey := sha256.Sum256([]byte(key))
+
+	if subtle.ConstantTimeCompare(hashedAPIKey[:], hashedKey[:]) == 1 {
 		return true, nil
 	}
 	return false, keyauth.ErrMissingOrMalformedAPIKey
 }
 
 func authFilter(c *fiber.Ctx) bool {
-  protectedURLs := map[string]interface{}{"/authenticated": nil, "/auth2": nil}
-  _, exists := protectedURLs[c.OriginalURL()]
-  return !exists
+	originalURL := strings.ToLower(c.OriginalURL())
+
+	for _, pattern := range protectedURLs {
+		if pattern.MatchString(originalURL) {
+			return false
+		}
+	}
+	return true
 }
 
 func main() {
-  app := fiber.New()
+	app := fiber.New()
 
-  app.Use(keyauth.New(keyauth.Config{
-    Filter: authFilter,
-    KeyLookup:  "cookie:access_token",
-    Validator:  validateAPIKey,
-  }))
+	app.Use(keyauth.New(keyauth.Config{
+		Filter:    authFilter,
+		KeyLookup: "cookie:access_token",
+		Validator: validateAPIKey,
+	}))
 
-  app.Get("/", func(c *fiber.Ctx) error {
-    return c.SendString("Welcome")
-  })
-  app.Get("/authenticated", func(c *fiber.Ctx) error {
-    return c.SendString("Successfully authenticated!")
-  })
-  app.Get("/auth2", func(c *fiber.Ctx) error {
-    return c.SendString("Successfully authenticated 2!")
-  })
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Welcome")
+	})
+	app.Get("/authenticated", func(c *fiber.Ctx) error {
+		return c.SendString("Successfully authenticated!")
+	})
+	app.Get("/auth2", func(c *fiber.Ctx) error {
+		return c.SendString("Successfully authenticated 2!")
+	})
 
-  app.Listen(":3000")
+	app.Listen(":3000")
 }
 ```
 
@@ -140,8 +162,10 @@ curl --cookie "access_token=correct horse battery staple" http://localhost:3000/
 package main
 
 import (
-  "github.com/gofiber/fiber/v2"
-  "github.com/gofiber/keyauth/v2"
+	"crypto/sha256"
+	"crypto/subtle"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/keyauth/v2"
 )
 
 const (
@@ -149,22 +173,40 @@ const (
 )
 
 func main() {
-  app := fiber.New()
+	app := fiber.New()
 
-  authMiddleware := keyauth.New(keyauth.Config{
-    KeyLookup:  "param:access_token",
-    Validator:  func(c *fiber.Ctx, key string) (bool, error) {
-        if key == apiKey {
-            return true, nil
-        }
-        return false, ErrMissingOrMalformedAPIKey
-    },
-  })
+	authMiddleware := keyauth.New(keyauth.Config{
+		Validator:  func(c *fiber.Ctx, key string) (bool, error) {
+			hashedAPIKey := sha256.Sum256([]byte(apiKey))
+			hashedKey := sha256.Sum256([]byte(key))
 
-  app.Get("/:access_token",  authMiddleware, func(c *fiber.Ctx) error {
-    return c.SendString("Successfully authenticated!")
-  })
+			if subtle.ConstantTimeCompare(hashedAPIKey[:], hashedKey[:]) == 1 {
+				return true, nil
+			}
+			return false, keyauth.ErrMissingOrMalformedAPIKey
+		},
+	})
 
-  app.Listen(":3000")
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Welcome")
+	})
+
+	app.Get("/allowed",  authMiddleware, func(c *fiber.Ctx) error {
+		return c.SendString("Successfully authenticated!")
+	})
+
+	app.Listen(":3000")
 }
+```
+
+Which results in this
+
+```bash
+# / does not need to be authenticated
+curl http://localhost:3000
+#> Welcome
+
+# /allowed needs to be authenticated too
+curl --header "Authorization: Bearer my-super-secret-key"  http://localhost:3000/allowed
+#> Successfully authenticated!
 ```
